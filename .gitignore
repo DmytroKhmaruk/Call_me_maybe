@@ -1,0 +1,29 @@
+
+# Virtual environment
+.venv
+.venv/
+venv/
+
+# Python cache
+__pycache__/
+*.py[cod]
+
+# Testing and linting
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.flake8_cache/
+
+# Generated output
+data/output/
+
+# AI model files and cache
+.cache/
+models/
+*.safetensors
+*.pt
+*.pth
+
+# Local environment
+.env
+.env.*
