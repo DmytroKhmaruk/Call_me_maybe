@@ -1,30 +1,31 @@
-
-from llm_sdk import Small_LLM_Model
+from pathlib import Path
+from .file_handler import load_functions, load_prompts
 
 
 def main() -> None:
-    model = Small_LLM_Model()
-
-    prompt = "The capital of France is"
-
-    input_ids = model.encode(prompt)[0].tolist()
-
-    generated_tokens: list[int] = []
-
-    for _ in range(10):
-        logits = model.get_logits_from_input_ids(input_ids)
-
-        best_token_id = max(
-            range(len(logits)),
-            key=lambda token_id: logits[token_id],
+    input_dir = Path("data/input")
+    try:
+        functions = load_functions(
+            input_dir / "functions_definition.json"
         )
+        prompts = load_prompts(
+            input_dir / "function_calling_tests.json"
+        )
+    except ValueError as exc:
+        print(f"Error: {exc}")
+        return
 
-        input_ids.append(best_token_id)
-        generated_tokens.append(best_token_id)
+    print(f"Loaded {len(functions)} functions")
+    print(f"Loaded {len(prompts)} prompts")
+    print("\nAvailable functions:")
+    for function in functions:
+        print(f"- {function.name}")
+        for name, definition in function.parameters.items():
+            print(f"    {name}: {definition.type}")
 
-    result = model.decode(generated_tokens)
-
-    print("Generated text:", result)
+    print("\nFirst prompt:")
+    if prompts:
+        print(prompts[0].prompt)
 
 
 if __name__ == "__main__":
