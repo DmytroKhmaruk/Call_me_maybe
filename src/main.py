@@ -3,7 +3,7 @@ from pathlib import Path
 from llm_sdk import Small_LLM_Model
 from .file_handler import load_functions
 from .function_selector import select_function
-from .joint_decoder import generate_joint_arguments
+from .constrained_json_decoder import generate_constrained_json
 
 
 def main() -> None:
@@ -15,7 +15,10 @@ def main() -> None:
 
         model = Small_LLM_Model()
 
-        user_prompt = "Add 12.5 and -4.25"
+        user_prompt = (
+            "Replace all vowels in 'Programming is fun' "
+            "with asterisks using regex."
+        )
 
         selected = select_function(
             model,
@@ -25,7 +28,7 @@ def main() -> None:
 
         print(f"Selected function: {selected.name}")
 
-        parameters = generate_joint_arguments(
+        parameters = generate_constrained_json(
             model,
             user_prompt,
             selected,

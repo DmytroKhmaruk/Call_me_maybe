@@ -46,7 +46,7 @@ def generate_number(model: Small_LLM_Model, context: str, max_tokens: int = 30
         generated_text = model.decode(generated_ids)
         input_ids = model.encode(context + generated_text)[0].tolist()
         logits = model.get_logits_from_input_ids(input_ids)
-        
+
         if not generated_ids:
             print("\nFirst-token diagnostics:")
 
