@@ -104,6 +104,25 @@ def consume_string(
     return True, index, False
 
 
+def consume_boolean(text: str, position: int) -> tuple[bool, int, bool]:
+    """Consume a JSON boolean or an incomplete boolean prefix."""
+    remaining = text[position:]
+    for literal in ("true", "false"):
+        if remaining.startswith(literal):
+            return True, position + len(literal), True
+
+    if remaining and any(
+        literal.startswith(remaining)
+        for literal in ("true", "false")
+    ):
+        return True, len(text), False
+
+    if remaining == "":
+        return True, position, False
+
+    return False, position, False
+
+
 def check_json_prefix(
     text: str,
     schema: list[tuple[str, str]],
@@ -140,6 +159,8 @@ def check_json_prefix(
             valid, position, finished = consume_string(
                 text, position
             )
+        elif value_type == "boolean":
+            valid, position, finished = consume_boolean(text, position)
         else:
             raise ValueError(
                 f"Unsupported type: {value_type}"

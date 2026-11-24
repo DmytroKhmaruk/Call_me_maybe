@@ -4,6 +4,8 @@ from llm_sdk import Small_LLM_Model
 
 from .json_state_machine import check_json_prefix
 from .models import FunctionDefinition
+from .token_selector import select_valid_token
+from time import perf_counter
 
 
 def generate_constrained_json(
@@ -20,124 +22,106 @@ def generate_constrained_json(
         return {}
 
     for definition in function.parameters.values():
-        if definition.type not in ("number", "string"):
+        if definition.type not in ("number", "string", "boolean"):
             raise ValueError(f"Unsupported parameter type: {definition.type}")
 
-    prompt = (
-        "You are a function calling assistant.\n"
-        "Convert the request into JSON arguments.\n"
-        "Follow the function description and parameter types.\n"
-        "Generate valid JSON only.\n"
-        "Preserve the exact source text.\n"
-        "For regex parameters, distinguish literal patterns "
-        "from character classes and repeated matches.\n\n"
-
-        "Example 1:\n"
-        "Request: Replace every digit in 'Room 82' with X.\n"
-        "JSON: "
-        '{"source_string": "Room 82", '
-        '"regex": "\\\\d", '
-        '"replacement": "X"}\n\n'
-
-        "Example 2:\n"
-        "Request: Replace all lowercase vowels in "
-        "'banana' with underscores.\n"
-        "JSON: "
-        '{"source_string": "banana", '
-        '"regex": "[aeiou]", '
-        '"replacement": "_"}\n\n'
-
-        "Example 3:\n"
-        "Request: Replace the word 'red' in "
-        "'red car' with blue.\n"
-        "JSON: "
-        '{"source_string": "red car", '
-        '"regex": "red", '
-        '"replacement": "blue"}\n\n'
-
-        f"Function: {function.name}\n"
-        f"Description: {function.description}\n"
-        f"Parameters: {', '.join(names)}\n"
-        f"Request: {user_prompt}\n"
-        "JSON: "
+    parameter_schema = "\n".join(
+        f"- {name}: type={definition.type}"
+        for name, definition in function.parameters.items()
     )
-    print("\n========== LLM PROMPT ==========")
-    print(prompt)
-    print("================================\n")
+
+    messages = [
+        {
+            "role": "system",
+            "content": (
+                "You are a precise function calling assistant.\n"
+                "Extract function arguments from the request.\n"
+                "Follow the function description and parameter types.\n"
+                "Preserve exact numbers, signs and source text.\n"
+                "For regex parameters, generate a regex pattern "
+                "that describes the requested matches.\n"
+                "Distinguish literal text, character classes, "
+                "digit patterns, and repetition.\n"
+                "When a request refers to all occurrences of a "
+                "category, the regex must match every relevant "
+                "occurrence.\n"
+                "Request: Replace all numeric sequences in "
+                "'Order 17 contains 250 items' with X.\n"
+                "Regex: \\\\d+\n"
+                "Request: Replace all vowels in 'banana' with X.\n"
+                "Regex: [aeiou]\n"
+                "Return only a valid JSON object.\n"
+                "Do not provide explanations."
+            ),
+        },
+        {
+            "role": "user",
+            "content": (
+                f"Function: {function.name}\n"
+                f"Description: {function.description}\n"
+                f"Parameter schema:\n{parameter_schema}\n"
+                f"Request: {user_prompt}"
+            ),
+        },
+    ]
+
+    prompt = ""
+
+    for message in messages:
+        prompt += (
+            f"<|im_start|>{message['role']}\n"
+            f"{message['content']}<|im_end|>\n"
+        )
+
+    prompt += (
+        "<|im_start|>assistant\n"
+        "<think>\n\n</think>\n"
+    )
 
     input_ids = model.encode(prompt)[0].tolist()
     generated_ids: list[int] = []
+    model_time = 0.0
+    selection_time = 0.0
     for step in range(max_tokens):
+        start_model = perf_counter()
         logits = model.get_logits_from_input_ids(input_ids)
-        if '"regex": "' in model.decode(generated_ids):
-            current_text = model.decode(generated_ids)
-
-            regex_prefix = current_text.split('"regex": "', 1)[1]
-
-            if regex_prefix == "":
-                print("\n=== REGEX FIRST TOKEN ===")
-
-                ranked = sorted(
-                    range(len(logits)),
-                    key=lambda token_id: logits[token_id],
-                    reverse=True,
-                )
-
-                print("Top 15 raw tokens:")
-
-                for token_id in ranked[:15]:
-                    token_text = model.decode([token_id])
-
-                    print(
-                        f"{token_text!r}: {logits[token_id]:.4f}"
-                    )
-
-                print("\nTokens starting with '[':")
-
-                count = 0
-
-                for token_id in ranked:
-                    token_text = model.decode([token_id])
-
-                    if token_text.startswith("["):
-                        print(
-                            f"{token_text!r}: "
-                            f"{logits[token_id]:.4f}"
-                        )
-                        count += 1
-
-                    if count == 5:
-                        break
-
-        ranked_ids = sorted(
-            range(len(logits)),
-            key=lambda token_id: logits[token_id],
-            reverse=True
-        )
-        selected_id: int | None = None
-        selected_text = ""
-        is_complete = False
+        model_time += perf_counter() - start_model
         current_text = model.decode(generated_ids)
-        for token_id in ranked_ids:
+
+        def is_valid_token(token_id: int) -> bool:
             candidate_ids = generated_ids + [token_id]
             candidate_text = model.decode(candidate_ids)
 
             if candidate_text == current_text:
-                continue
+                return False
 
-            valid, complete = check_json_prefix(candidate_text, schema)
+            valid, _ = check_json_prefix(
+                candidate_text,
+                schema,
+            )
 
-            if valid:
-                selected_id = token_id
-                selected_text = candidate_text
-                is_complete = complete
-                break
+            return valid
 
-        if selected_id is None:
-            raise ValueError("No valid next token found")
+        start_selection = perf_counter()
+
+        selected_id = select_valid_token(
+            logits,
+            is_valid_token,
+            top_k=128,
+        )
+
+        selection_time += perf_counter() - start_selection
 
         generated_ids.append(selected_id)
         input_ids.append(selected_id)
+
+        selected_text = model.decode(generated_ids)
+
+        valid, is_complete = check_json_prefix(
+            selected_text,
+            schema,
+        )
+
         print(f"Step {step + 1}: {selected_text!r}")
 
         if is_complete:
@@ -156,6 +140,11 @@ def generate_constrained_json(
                 elif definition.type == "string":
                     if not isinstance(value, str):
                         raise ValueError(f"Invalid string: {name}")
+            print("\n=== DECODER PROFILE ===")
+            print(f"Model forward: {model_time:.3f} s")
+            print(f"Token selection: {selection_time:.3f} s")
+            print(f"Generated tokens: {len(generated_ids)}")
+            print("=======================\n")
 
             return result
 
