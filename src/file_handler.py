@@ -1,4 +1,3 @@
-"""Load and validate function-calling input files."""
 import json
 from pathlib import Path
 from pydantic import TypeAdapter, ValidationError

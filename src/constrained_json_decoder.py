@@ -1,18 +1,15 @@
 import json
-
 from llm_sdk import Small_LLM_Model
-
 from .json_state_machine import check_json_prefix
 from .models import FunctionDefinition
 from .token_selector import select_valid_token
-from time import perf_counter
 
 
 def generate_constrained_json(
     model: Small_LLM_Model, user_prompt: str,
     function: FunctionDefinition, max_tokens: int = 100
-) -> dict[str, int | float | str]:
-    """Generate numeric parameters constrained by a JSON schema."""
+) -> dict[str, int | float | str | bool]:
+    """Generate schema-constrained JSON function arguments."""
     names = list(function.parameters)
     schema = [
         (name, definition.type)
@@ -80,12 +77,9 @@ def generate_constrained_json(
 
     input_ids = model.encode(prompt)[0].tolist()
     generated_ids: list[int] = []
-    model_time = 0.0
-    selection_time = 0.0
-    for step in range(max_tokens):
-        start_model = perf_counter()
+
+    for _ in range(max_tokens):
         logits = model.get_logits_from_input_ids(input_ids)
-        model_time += perf_counter() - start_model
         current_text = model.decode(generated_ids)
 
         def is_valid_token(token_id: int) -> bool:
@@ -102,27 +96,21 @@ def generate_constrained_json(
 
             return valid
 
-        start_selection = perf_counter()
-
         selected_id = select_valid_token(
             logits,
             is_valid_token,
-            top_k=128,
+            top_k=128
         )
-
-        selection_time += perf_counter() - start_selection
 
         generated_ids.append(selected_id)
         input_ids.append(selected_id)
 
         selected_text = model.decode(generated_ids)
 
-        valid, is_complete = check_json_prefix(
+        _, is_complete = check_json_prefix(
             selected_text,
             schema,
         )
-
-        print(f"Step {step + 1}: {selected_text!r}")
 
         if is_complete:
             result = json.loads(selected_text)
@@ -140,11 +128,9 @@ def generate_constrained_json(
                 elif definition.type == "string":
                     if not isinstance(value, str):
                         raise ValueError(f"Invalid string: {name}")
-            print("\n=== DECODER PROFILE ===")
-            print(f"Model forward: {model_time:.3f} s")
-            print(f"Token selection: {selection_time:.3f} s")
-            print(f"Generated tokens: {len(generated_ids)}")
-            print("=======================\n")
+                elif definition.type == "boolean":
+                    if type(value) is not bool:
+                        raise ValueError(f"Invalid boolean: {name}")
 
             return result
 

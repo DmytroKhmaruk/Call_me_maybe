@@ -49,7 +49,6 @@ def select_function(model: Small_LLM_Model, user_prompt: str,
     best_score = float("-inf")
     for function in functions:
         score = score_function(model, prompt, function.name)
-        print(f"{function.name}: {score:.4f}")
         if score > best_score:
             best_score = score
             best_function = function

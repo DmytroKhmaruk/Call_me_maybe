@@ -7,7 +7,7 @@ import string
 
 
 NUMBER_PREFIX = re.compile(
-    r"-?(?:0|[1-9][0-9]*)?"
+    r"-?(?:0|[1-9][0-9]*)"
     r"(?:\.[0-9]*)?"
     r"(?:[eE][+-]?[0-9]*)?"
 )
@@ -50,7 +50,10 @@ def consume_number(
     number_text = text[position:end]
 
     if end == len(text):
-        valid = NUMBER_PREFIX.fullmatch(number_text) is not None
+        valid = (
+            number_text in ("", "-")
+            or NUMBER_PREFIX.fullmatch(number_text) is not None
+        )
         return valid, end, False
 
     valid = NUMBER_COMPLETE.fullmatch(number_text) is not None
@@ -137,9 +140,9 @@ def check_json_prefix(
         key = json.dumps(name)
 
         if index == 0:
-            expected = "{" + key + ": "
+            expected = "{" + key + ":"
         else:
-            expected = ", " + key + ": "
+            expected = ", " + key + ":"
 
         valid, position, finished = consume_literal(
             text, position, expected
@@ -150,6 +153,9 @@ def check_json_prefix(
 
         if not finished:
             return True, False
+
+        while position < len(text) and text[position] in " \t\n\r":
+            position += 1
 
         if value_type == "number":
             valid, position, finished = consume_number(

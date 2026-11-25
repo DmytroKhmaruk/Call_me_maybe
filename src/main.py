@@ -1,12 +1,7 @@
-
-"""Main entry point for the Call Me Maybe project."""
-
 import argparse
 import sys
 from pathlib import Path
-
 from llm_sdk import Small_LLM_Model
-
 from .constrained_json_decoder import generate_constrained_json
 from .file_handler import load_functions, load_prompts
 from .function_selector import select_function
@@ -55,10 +50,8 @@ def main() -> None:
         if not functions:
             raise ValueError("No functions were provided")
 
-        print(f"Loaded {len(functions)} functions")
-        print(f"Loaded {len(prompts)} prompts")
-
         results: list[dict[str, object]] = []
+        decoding_times: list[float] = []
 
         if prompts:
             model = Small_LLM_Model()
@@ -74,8 +67,6 @@ def main() -> None:
                     request.prompt,
                     functions,
                 )
-
-                print(f"Selected function: {selected.name}")
                 start = perf_counter()
                 parameters = generate_constrained_json(
                     model,
