@@ -1,5 +1,5 @@
 
-.PHONY: install run debug clean lint lint-strict test
+.PHONY: install run debug clean lint
 
 install:
 	uv sync
@@ -11,8 +11,8 @@ debug:
 	uv run python -m pdb -m src
 
 clean:
-	find src tests -type d -name "__pycache__" -prune -exec rm -rf {} +
-	find src tests -type f -name "*.pyc" -delete
+	find src -type d -name "__pycache__" -prune -exec rm -rf {} +
+	find src -type f -name "*.pyc" -delete
 	rm -rf .mypy_cache .pytest_cache .ruff_cache
 
 lint:

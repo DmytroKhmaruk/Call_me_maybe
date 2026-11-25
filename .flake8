@@ -1,0 +1,12 @@
+[flake8]
+exclude = .git,
+    .venv,
+    venv,
+    .uv-cache,
+    __pycache__,
+    .mypy_cache,
+    .pytest_cache,
+    .ruff_cache,
+    llm_sdk,
+    moulinette,
+    data

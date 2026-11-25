@@ -76,7 +76,7 @@ def main() -> None:
                 elapsed = perf_counter() - start
                 decoding_times.append(elapsed)
                 print(f"Constrained decoding: {elapsed:.3f} seconds")
-                result = {
+                result: dict[str, object] = {
                     "prompt": request.prompt,
                     "name": selected.name,
                     "parameters": parameters,

@@ -19,7 +19,7 @@ def generate_constrained_json(
         return {}
 
     for definition in function.parameters.values():
-        if definition.type not in ("number", "string", "boolean"):
+        if definition.type not in ("number", "integer", "string", "boolean"):
             raise ValueError(f"Unsupported parameter type: {definition.type}")
 
     parameter_schema = "\n".join(
@@ -124,10 +124,16 @@ def generate_constrained_json(
                 if definition.type == "number":
                     if type(value) not in (int, float):
                         raise ValueError(f"Invalid number: {name}")
+                    result[name] = float(value)
+
+                elif definition.type == "integer":
+                    if type(value) is not int:
+                        raise ValueError(f"Invalid integer: {name}")
 
                 elif definition.type == "string":
                     if not isinstance(value, str):
                         raise ValueError(f"Invalid string: {name}")
+
                 elif definition.type == "boolean":
                     if type(value) is not bool:
                         raise ValueError(f"Invalid boolean: {name}")

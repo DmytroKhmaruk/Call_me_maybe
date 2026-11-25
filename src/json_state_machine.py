@@ -18,6 +18,9 @@ NUMBER_COMPLETE = re.compile(
     r"(?:[eE][+-]?[0-9]+)?"
 )
 
+INTEGER_PREFIX = re.compile(r"-?(?:0|[1-9][0-9]*)?")
+INTEGER_COMPLETE = re.compile(r"-?(?:0|[1-9][0-9]*)")
+
 
 def consume_literal(
     text: str,
@@ -40,6 +43,7 @@ def consume_literal(
 def consume_number(
     text: str,
     position: int,
+    value_type: str = "number"
 ) -> tuple[bool, int, bool]:
     """Consume a JSON number or an unfinished number prefix."""
     end = position
@@ -49,14 +53,21 @@ def consume_number(
 
     number_text = text[position:end]
 
+    if value_type == "integer":
+        prefix_pattern = INTEGER_PREFIX
+        complete_pattern = INTEGER_COMPLETE
+    else:
+        prefix_pattern = NUMBER_PREFIX
+        complete_pattern = NUMBER_COMPLETE
+
     if end == len(text):
         valid = (
             number_text in ("", "-")
-            or NUMBER_PREFIX.fullmatch(number_text) is not None
+            or prefix_pattern.fullmatch(number_text) is not None
         )
         return valid, end, False
 
-    valid = NUMBER_COMPLETE.fullmatch(number_text) is not None
+    valid = complete_pattern.fullmatch(number_text) is not None
 
     return valid, end, valid
 
@@ -157,7 +168,7 @@ def check_json_prefix(
         while position < len(text) and text[position] in " \t\n\r":
             position += 1
 
-        if value_type == "number":
+        if value_type in ("number", "integer"):
             valid, position, finished = consume_number(
                 text, position
             )
